@@ -299,10 +299,10 @@ const TOOLS_A: &[Item] = &[
     head("Score logger"),
     it(DUMP_LOG_LABEL, "").sub(),
     it(CLEAR_LOG_LABEL, "").on(),
-    head("Audio logger"),
-    it("Enabled", "").tick(),
-    it("Settings", "").sub(),
-    it("Dump to audio editor", ""),
+    head(LOGGER_HEAD),
+    it(LOGGER_ON_LABEL, "").on().tick(),
+    it(LOGGER_SETTINGS_LABEL, "").sub(),
+    it(LOGGER_DUMP_LABEL, "").on(),
     head("Last tweaked parameters"),
     it("Last tweaked", "").sub(),
     it("Next to last tweaked", "").sub(),
@@ -432,6 +432,7 @@ pub fn label_now(s: &State, menu: usize, item: &Item) -> std::borrow::Cow<'stati
     match (menu, item.label) {
         (EDIT_MENU, "Undo") => crate::history::edit_label(s, false).into(),
         (EDIT_MENU, "Redo") => crate::history::edit_label(s, true).into(),
+        (TOOLS_MENU, LOGGER_HEAD) => format!("{LOGGER_HEAD} (memory used: {}MB)", crate::audio_log::memory_mb()).into(),
         _ => label_of(menu, item),
     }
 }
@@ -488,6 +489,11 @@ pub const ONE_CLICK_LABEL: &str = "One-click audio recording";
 pub const REMOVE_TESLAS_LABEL: &str = "Remove all audio editor instances";
 pub const DUMP_LOG_LABEL: &str = "Dump score log to selected pattern";
 pub const CLEAR_LOG_LABEL: &str = "Clear log";
+/// TOOLS > Audio logger (spec: ui/audio-logger.md); its header shows the memory the log takes.
+pub const LOGGER_HEAD: &str = "Audio logger";
+pub const LOGGER_ON_LABEL: &str = "Enabled";
+pub const LOGGER_SETTINGS_LABEL: &str = "Settings";
+pub const LOGGER_DUMP_LABEL: &str = "Dump to audio editor";
 pub const EDITORS_LABEL: &str = "Switch all plugin editors to";
 pub const DECLICK_LABEL: &str = "Change declicking for selected channels to";
 /// TOOLS > Switch all / selected audio clip channels to ▸, also in the channel rack's options menu (spec:
@@ -511,6 +517,7 @@ pub fn submenu(menu: usize, label: &str) -> Option<fn(&State) -> Vec<crate::play
         (TOOLS_MENU, ONE_CLICK_LABEL) => Some(crate::one_click::items),
         // spec: ui/recording.md §6
         (TOOLS_MENU, DUMP_LOG_LABEL) => Some(crate::score_log::items),
+        (TOOLS_MENU, LOGGER_SETTINGS_LABEL) => Some(crate::audio_log::items),
         (TOOLS_MENU, DECLICK_LABEL) => Some(crate::rack::declick_items),
         (TOOLS_MENU, CLIPS_ALL_LABEL) => Some(|_| crate::rack::stretch_items(true)),
         (TOOLS_MENU, CLIPS_SEL_LABEL) => Some(|_| crate::rack::stretch_items(false)),
@@ -581,6 +588,7 @@ fn mark_of(s: &State, menu: usize, item: &Item) -> Mark {
         (Mark::Check(_), _) if item.label == GROUPS_LABEL => Mark::Check(crate::enable_groups::on()),
         (Mark::Check(_), _) if item.label == STEP_EDIT_LABEL => Mark::Check(crate::step_edit::on()),
         (Mark::Check(_), _) if item.label == MULTILINK_LABEL => Mark::Check(s.multilink.on),
+        (Mark::Check(_), _) if menu == TOOLS_MENU && item.label == LOGGER_ON_LABEL => Mark::Check(crate::audio_log::enabled()),
         (Mark::Check(_), _) if let Some(sw) = crate::midi_cfg::Switch::from_label(item.label) => Mark::Check(sw.on()),
         (mk, _) => mk,
     }
@@ -799,7 +807,7 @@ pub fn paint_dropdown(ui: &mut Ui, s: &State, menu: usize, k: f32) {
             let rr = Rect::new(col.x, y, col.w, h);
             match item.kind {
                 Kind::Sep => ui.c.fill_rect(Rect::new(col.x, y + mt.sep_line, col.w, mt.line), t.menu_pop_head),
-                Kind::Head => head_row(ui, rr, item.label),
+                Kind::Head => head_row(ui, rr, &label_now(s, menu, item)),
                 Kind::Item => {
                     let ok = active(s, menu, item);
                     // Greyed-out entries never light up; they only say they are not available yet (EDIT's without a
@@ -999,7 +1007,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(built, ["New from template", "Import", "Effect", "Toolbars", ONE_CLICK_LABEL, DUMP_LOG_LABEL, CLIPS_ALL_LABEL, CLIPS_SEL_LABEL, EDITORS_LABEL, DECLICK_LABEL]);
+        assert_eq!(built, ["New from template", "Import", "Effect", "Toolbars", ONE_CLICK_LABEL, DUMP_LOG_LABEL, LOGGER_SETTINGS_LABEL, CLIPS_ALL_LABEL, CLIPS_SEL_LABEL, EDITORS_LABEL, DECLICK_LABEL]);
         let labels = |menu, label| submenu(menu, label).unwrap()(&app.state).iter().map(|p| p.label.to_string()).collect::<Vec<_>>();
         let modes = ["Out only (no bleeding)", "Transient (no bleeding)", "Transient (bleeding)", "Generic (bleeding)", "Smooth (bleeding)", "Crossfade (bleeding)"];
         assert_eq!(labels(TOOLS_MENU, DECLICK_LABEL), modes, "the six declick modes in order (spec: audio/declick.md)");
